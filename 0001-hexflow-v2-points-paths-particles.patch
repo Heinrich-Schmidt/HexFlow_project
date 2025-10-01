@@ -1,0 +1,1053 @@
+diff --git a/v2/index.html b/v2/index.html
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/index.html
+@@ -0,0 +42 @@
++<!DOCTYPE html>
++<html lang="ru">
++<head>
++  <meta charset="UTF-8" />
++  <title>HexFlow v2 — points, paths, particles</title>
++  <meta name="viewport" content="width=device-width, initial-scale=1" />
++  <link rel="stylesheet" href="./styles.css" />
++  <script type="importmap">
++  {
++    "imports": {
++      "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
++      "OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/controls/OrbitControls.js"
++    }
++  }
++  </script>
++</head>
++<body>
++  <div class="topbar">
++    <div class="panel-toggles">
++      <label class="chip"><input id="toggle-view" type="checkbox" /> View</label>
++      <label class="chip"><input id="toggle-geom" type="checkbox" /> Geometry</label>
++      <label class="chip"><input id="toggle-mat"  type="checkbox" /> Materials</label>
++      <label class="chip"><input id="toggle-typ"  type="checkbox" /> Typography</label>
++      <label class="chip"><input id="toggle-pts"  type="checkbox" /> Points</label>
++      <label class="chip"><input id="toggle-path" type="checkbox" /> Path</label>
++      <label class="chip"><input id="toggle-prt" type="checkbox" /> Particles</label>
++    </div>
++    <div class="panels">
++      <div class="ui hidden" id="view-ui"><h3>View</h3><div id="view-rows"></div></div>
++      <div class="ui hidden" id="geom-ui"><h3>Geometry</h3><div id="geom-rows"></div></div>
++      <div class="ui hidden" id="mat-ui"><h3>Materials</h3><div id="mat-rows"></div></div>
++      <div class="ui hidden" id="typ-ui"><h3>Typography</h3><div id="typ-rows"></div></div>
++      <div class="ui hidden" id="pts-ui"><h3>Points</h3><div id="pts-rows"></div></div>
++      <div class="ui hidden" id="path-ui"><h3>Path</h3><div id="path-rows"></div></div>
++      <div class="ui hidden" id="prt-ui"><h3>Particles</h3><div id="prt-rows"></div></div>
++    </div>
++  </div>
++  <div id="viewport"></div>
++  <script type="module" src="./src/main.js"></script>
++</body>
++</html>
++
+diff --git a/v2/styles.css b/v2/styles.css
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/styles.css
+@@ -0,0 +29 @@
++:root { color-scheme: dark; }
++html, body {
++  margin: 0; height: 100%;
++  display: flex; flex-direction: column;
++  font: 14px/1.35 system-ui, sans-serif;
++  background: -webkit-radial-gradient(top, #00b8ff, #14142f);
++}
++.topbar { padding: 12px; display:flex; flex-direction:column; gap:10px;
++  background: linear-gradient(#0f1012, #0f1012cc); border-bottom: 1px solid #222; }
++.panel-toggles { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
++.chip { display:flex; gap:8px; align-items:center; padding:6px 10px; border-radius:8px;
++  border:1px solid #222; background:#000a; color:#e5e7eb; font-size:12px; cursor:pointer; user-select:none; backdrop-filter: blur(4px); }
++.panels { display:flex; gap:10px; flex-wrap:wrap; }
++.ui { background:#0009; border:1px solid #222; border-radius:10px; padding:12px 14px; color:#e5e7eb; backdrop-filter: blur(4px); min-width: 280px; }
++.ui.hidden { display:none; }
++.ui h3 { margin:0 0 8px 0; font-size:12px; opacity:.8; letter-spacing:.04em; text-transform:uppercase; }
++.row { display:flex; align-items:center; gap:8px; margin:6px 0; }
++.row label { width: 200px; opacity:.9; font-size:12px; }
++.row input[type=range]{ flex:1; }
++.row input[type=number], .row input[type=text]{
++  width:120px; background:#0e0f11; border:1px solid #333; border-radius:6px; color:#e5e7eb; padding:4px 6px;
++}
++.row select{ flex:1; min-width:220px; background:#0e0f11; border:1px solid #333; color:#e5e7eb; border-radius:6px; padding:6px; }
++.row input[type=checkbox]{ transform: translateY(1px); }
++#viewport { flex:1; min-height:0; position:relative; }
++#viewport canvas { display:block; width:100%; height:100%; mix-blend-mode: screen; }
++.small { font-size:12px; opacity:.8; }
++.code { font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#0e0f11; padding:4px 6px; border-radius:6px; border:1px solid #333; }
++
+diff --git a/v2/src/main.js b/v2/src/main.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/src/main.js
+@@ -0,0 +190 @@
++import * as THREE from 'three';
++import { OrbitControls } from 'OrbitControls';
++import { buildGeometry, computeHex } from './geometry.js';
++import { buildMaterial, updateMaterialFromUI } from './materials.js';
++import { makeLabelMesh, disposeLabel } from './labels.js';
++import { buildPoints, layoutPoints } from './points.js';
++import { buildCurveFromPath, parsePathSpec } from './paths.js';
++import { ParticlesSystem } from './particles.js';
++import { buildUI } from './ui.js';
++
++// ===== Globals
++const scene = new THREE.Scene();
++scene.background = new THREE.Color(0x000000);
++const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
++camera.position.set(0,0,10);
++
++const renderer = new THREE.WebGLRenderer({antialias:true});
++const vp = document.getElementById('viewport');
++vp.appendChild(renderer.domElement);
++const DPR = Math.min(2.5, window.devicePixelRatio || 1);
++renderer.setPixelRatio(DPR);
++renderer.outputColorSpace = THREE.SRGBColorSpace;
++renderer.toneMapping = THREE.ACESFilmicToneMapping;
++renderer.toneMappingExposure = 1.0;
++renderer.physicallyCorrectLights = true;
++
++const controls = new OrbitControls(camera, renderer.domElement);
++controls.enableDamping = true; controls.dampingFactor = .08; controls.enablePan = false;
++
++// lights
++const key = new THREE.DirectionalLight(0xffffff, .8);
++const fill = new THREE.DirectionalLight(0xffffff, 1.08);
++const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, .51);
++const amb = new THREE.AmbientLight(0xffffff, .73);
++scene.add(key, fill, hemi, amb);
++
++function sizeRendererToViewport() {
++  const w = vp.clientWidth;
++  const h = vp.clientHeight || 1;
++  renderer.setSize(w, h, false);
++  camera.aspect = w/h; camera.updateProjectionMatrix();
++}
++new ResizeObserver(sizeRendererToViewport).observe(vp); addEventListener('resize', sizeRendererToViewport); sizeRendererToViewport();
++
++// ===== Root groups
++const root = new THREE.Group(); scene.add(root);
++const hexGroup = new THREE.Group(); root.add(hexGroup);
++const labelsGroup = new THREE.Group(); root.add(labelsGroup);
++const pointsGroup = new THREE.Group(); root.add(pointsGroup);
++const gizmosGroup = new THREE.Group(); root.add(gizmosGroup); // future
++const particlesGroup = new THREE.Group(); root.add(particlesGroup);
++
++// ===== UI State
++const UI = buildUI({
++  onAnyChange,
++  onViewChange: applyViewFromUI,
++  onPathChange: rebuildPathAndParticles,
++  onTogglePanels: () => requestAnimationFrame(sizeRendererToViewport)
++});
++
++// ===== View sync (sliders <-> mouse)
++let suppressSync = false;
++controls.addEventListener('change', () => {
++  if (suppressSync) return;
++  const az = controls.getAzimuthalAngle();
++  const pol = controls.getPolarAngle();
++  const rxDeg = THREE.MathUtils.radToDeg(pol - Math.PI/2);
++  const ryDeg = THREE.MathUtils.radToDeg(az);
++  suppressSync = true;
++  UI.view.rx.set(rxDeg); UI.view.ry.set(ryDeg);
++  suppressSync = false;
++});
++function applyViewFromUI() {
++  const rx = THREE.MathUtils.degToRad(UI.view.rx.value);
++  const ry = THREE.MathUtils.degToRad(UI.view.ry.value);
++  const rz = THREE.MathUtils.degToRad(UI.view.rz.value);
++  const polar = THREE.MathUtils.clamp(rx + Math.PI/2, 0.01, Math.PI-0.01);
++  const azim = ry;
++  suppressSync = true;
++  controls.minPolarAngle = controls.maxPolarAngle = polar;
++  controls.minAzimuthAngle = controls.maxAzimuthAngle = azim;
++  root.rotation.z = rz;
++  controls.update();
++  setTimeout(()=>{
++    controls.minPolarAngle=0; controls.maxPolarAngle=Math.PI;
++    controls.minAzimuthAngle=-Infinity; controls.maxAzimuthAngle=Infinity;
++    suppressSync = false;
++  },0);
++}
++renderer.domElement.addEventListener('wheel', (e)=>{
++  if (!UI.view.scaleWheel) return;
++  e.preventDefault();
++  const s = THREE.MathUtils.clamp(UI.view.scale.value * (e.deltaY<0?1.05:0.95), 0.2, 5);
++  UI.view.scale.set(s);
++  root.scale.setScalar(s);
++},{passive:false});
++
++// ===== Build & Rebuild
++let segMeshes = []; let centerMesh=null; let labelMeshes=[];
++let pts = []; // {id, mesh, label, pos}
++let activeCurve = null;
++let particlesFwd=null, particlesBack=null;
++
++function fitCamera(obj){
++  const box = new THREE.Box3().setFromObject(obj);
++  const size = new THREE.Vector3(); box.getSize(size);
++  const center = new THREE.Vector3(); box.getCenter(center);
++  const maxDim = Math.max(size.x,size.y,size.z);
++  const fov = camera.fov * (Math.PI/180);
++  let dist = (maxDim/2)/Math.tan(fov/2); dist *= 1.35;
++  camera.position.set(center.x, center.y, dist);
++  camera.near = dist/100; camera.far = dist*10; camera.updateProjectionMatrix();
++  controls.target.copy(center); camera.lookAt(center);
++}
++
++function rebuildAll(){
++  // geometry
++  hexGroup.clear(); labelsGroup.clear();
++  const g = buildGeometry(UI);
++  segMeshes = g.segMeshes;
++  centerMesh = g.centerMesh;
++  segMeshes.forEach(m=>hexGroup.add(m)); hexGroup.add(centerMesh);
++
++  // labels on segments/center (IDs not needed here; labelsGroup reserved for point labels)
++  // (skipped segment labels to keep perf; points' labels are added below)
++
++  // points
++  rebuildPoints();
++
++  // path & particles
++  rebuildPathAndParticles();
++
++  fitCamera(root);
++  applyViewFromUI();
++}
++
++function rebuildPoints(){
++  pointsGroup.clear(); labelMeshes.forEach(disposeLabel); labelMeshes = [];
++  const geom = computeHex(UI);
++  pts = buildPoints(UI, geom);
++  // draw points (red) + labels
++  pts.forEach(p=>{
++    pointsGroup.add(p.mesh);
++    if (UI.points.showLabels) {
++      const lm = makeLabelMesh(p.id, UI.typography);
++      lm.position.set(p.pos.x, p.pos.y, p.pos.z + 0.001);
++      labelsGroup.add(lm);
++      labelMeshes.push(lm);
++    }
++  });
++}
++
++function rebuildPathAndParticles(){
++  // parse path spec -> ordered ids
++  const spec = UI.path.spec;
++  const ids = parsePathSpec(spec, pts.map(p=>p.id));
++  // build curve
++  activeCurve = buildCurveFromPath(ids, pts, UI.path);
++  // particles
++  particlesGroup.clear();
++  particlesFwd = new ParticlesSystem(activeCurve, UI.particles.fwd, {glowLight: UI.particles.followerLight});
++  particlesBack= new ParticlesSystem(activeCurve, UI.particles.back,{reverse:true, glowLight: UI.particles.followerLight});
++  particlesGroup.add(particlesFwd.object3d);
++  particlesGroup.add(particlesBack.object3d);
++}
++
++function onAnyChange(kind){
++  if (kind==='geometry' || kind==='view'){ rebuildAll(); return; }
++  if (kind==='materials'){ updateMaterialFromUI(UI, [...segMeshes, centerMesh]); return; }
++  if (kind==='typography'){ rebuildPoints(); return; }
++  if (kind==='points'){ rebuildPoints(); return; }
++  if (kind==='path'){ rebuildPathAndParticles(); return; }
++  if (kind==='particles'){ /* live updated in tick */ return; }
++}
++
++// ===== Kick
++rebuildAll();
++
++// ===== Tick
++const clock = new THREE.Clock();
++function loop(){
++  const dt = Math.min(0.033, clock.getDelta());
++  particlesFwd && particlesFwd.update(dt);
++  particlesBack && particlesBack.update(dt);
++  controls.update();
++  renderer.render(scene, camera);
++  requestAnimationFrame(loop);
++}
++loop();
++
+diff --git a/v2/src/geometry.js b/v2/src/geometry.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/src/geometry.js
+@@ -0,0 +161 @@
++import * as THREE from 'three';
++
++export const OUTER_R = 3.2;
++
++export function computeHex(UI){
++  const ratio = UI.geometry.ratio.value/100;
++  const R = OUTER_R;
++  const innerR = R * ratio;
++  const a0 = 0; // flat-top
++  const V2 = THREE.Vector2;
++  const outer = [], inner = [];
++  for(let i=0;i<6;i++){
++    const a = a0 + i*Math.PI/3;
++    outer.push(new V2(R*Math.cos(a), R*Math.sin(a)));
++    inner.push(new V2(innerR*Math.cos(a), innerR*Math.sin(a)));
++  }
++  return {outer, inner};
++}
++
++// helpers
++const ease = (t)=> (1 - Math.cos(Math.PI * t)) * 0.5;
++function inwardNormal(p, q, centroid) {
++  const e = new THREE.Vector2().subVectors(q, p);
++  const n = new THREE.Vector2(-e.y, e.x).normalize();
++  const mid = new THREE.Vector2().addVectors(p, q).multiplyScalar(.5);
++  const toC = new THREE.Vector2().subVectors(centroid, mid);
++  return (n.dot(toC) > 0) ? n : n.multiplyScalar(-1);
++}
++function lineIntersect(p1,d1,p2,d2){
++  const a=d1.x,b=-d2.x,c=d1.y,d=-d2.y;
++  const det = a*d-b*c; if(Math.abs(det)<1e-8) return p1.clone();
++  const rhsx = p2.x-p1.x, rhsy=p2.y-p1.y;
++  const t = (rhsx*d - b*rhsy)/det;
++  return new THREE.Vector2(p1.x + d1.x*t, p1.y + d1.y*t);
++}
++function insetQuad(A,B,C,D, dist){
++  const centroid = new THREE.Vector2((A.x+B.x+C.x+D.x)/4,(A.y+B.y+C.y+D.y)/4);
++  const P=[A,B,C,D], lines=[];
++  for(let i=0;i<4;i++){
++    const p=P[i], q=P[(i+1)%4];
++    const n=inwardNormal(p,q,centroid);
++    const d=new THREE.Vector2(-n.y,n.x);
++    const pShift=new THREE.Vector2().addVectors(p, n.clone().multiplyScalar(dist));
++    lines.push({p:pShift, d});
++  }
++  return [
++    lineIntersect(lines[3].p,lines[3].d, lines[0].p,lines[0].d),
++    lineIntersect(lines[0].p,lines[0].d, lines[1].p,lines[1].d),
++    lineIntersect(lines[1].p,lines[1].d, lines[2].p,lines[2].d),
++    lineIntersect(lines[2].p,lines[2].d, lines[3].p,lines[3].d),
++  ];
++}
++function addBand(verts,P,Q,z1,z2){
++  const v=(p,z)=>[p.x,p.y,z];
++  const tri=(p1,p2,p3,za,zb,zc)=>verts.push(...v(p1,za),...v(p2,zb),...v(p3,zc));
++  for(let i=0;i<P.length;i++){
++    const p1=P[i], p2=P[(i+1)%P.length];
++    const q1=Q[i], q2=Q[(i+1)%Q.length];
++    tri(p1,p2,q2,z1,z1,z2); tri(p1,q2,q1,z1,z2,z2);
++  }
++}
++function quadCentroid(Q){ return new THREE.Vector2((Q[0].x+Q[1].x+Q[2].x+Q[3].x)/4,(Q[0].y+Q[1].y+Q[2].y+Q[3].y)/4); }
++
++export function buildGeometry(UI){
++  const {outer, inner} = computeHex(UI);
++  const g = UI.geometry;
++  const roundSteps = Math.max(1, Math.floor(g.round.value));
++  const H = g.relief.value/20;
++  const rim = g.rim.value/40; // ramp width
++  const T = g.thick.value/20;
++  const gapWorld = g.gap.value/20;
++
++  const segMeshes=[];
++  const color = UI.appearance.elemColor.value;
++  const mat = (op)=> UI._materialsFactory(op); // injected later
++
++  for(let i=0;i<6;i++){
++    const A=outer[i], B=outer[(i+1)%6], C=inner[(i+1)%6], D=inner[i];
++    const sCfg = UI.segments[i];
++    const verts=[];
++    const outerQ=[A,B,C,D]; let prev=outerQ, prevZ=0, poly=null;
++    const maxInset = Math.min(A.distanceTo(B),B.distanceTo(C),C.distanceTo(D),D.distanceTo(A))*0.24;
++    const s = Math.min(Math.max(rim,0), maxInset);
++    for(let k=1;k<=roundSteps;k++){
++      const t=k/roundSteps, zi=H*ease(t), si=s*t;
++      poly = insetQuad(A,B,C,D, si);
++      addBand(verts, prev, poly, prevZ, zi);
++      prev = poly; prevZ = zi;
++    }
++    // top cap
++    const tri=(p1,p2,p3)=>verts.push(p1.x,p1.y,prevZ, p2.x,p2.y,prevZ, p3.x,p3.y,prevZ);
++    tri(poly[0],poly[1],poly[2]); tri(poly[0],poly[2],poly[3]);
++    // back cap
++    if (T>0){
++      const Zb = -T;
++      tri(D,C,B); tri(D,B,A);
++      // soft bevels kept subtle
++    }
++    const geo = new THREE.BufferGeometry();
++    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts,3));
++    geo.computeVertexNormals();
++    const m = mat(sCfg.opacity);
++    const seg = new THREE.Mesh(geo, m);
++
++    // radial offset
++    const cx=(A.x+B.x+C.x+D.x)/4, cy=(A.y+B.y+C.y+D.y)/4;
++    const len=Math.hypot(cx,cy)||1;
++    const extra = (gapWorld + (sCfg.gap||0)/20);
++    seg.position.set((cx/len)*extra, (cy/len)*extra, 0);
++
++    segMeshes.push(seg);
++  }
++
++  // center
++  // IMPORTANT: don't "eat" the center by rim. Use independent inset progression that starts from 0.
++  const centroid = new THREE.Vector2(0,0);
++  const mkInsetHex = (k) => {
++    const lines=[];
++    for(let i=0;i<6;i++){
++      const p=inner[i], q=inner[(i+1)%6];
++      const n=inwardNormal(p,q,centroid);
++      const d=new THREE.Vector2(-n.y,n.x);
++      const pShift=new THREE.Vector2().addVectors(p, n.clone().multiplyScalar(k)); // no extra rim bias here
++      lines.push({p:pShift,d});
++    }
++    const poly=[];
++    for(let i=0;i<6;i++){
++      const L1=lines[(i+5)%6], L2=lines[i];
++      poly.push(lineIntersect(L1.p,L1.d, L2.p,L2.d));
++    }
++    return poly;
++  };
++  const vertsC=[];
++  let prevPoly=inner, prevZ=0, polyC=null;
++  for(let i=1;i<=roundSteps;i++){
++    const t=i/roundSteps, zi=H*ease(t);
++    polyC = mkInsetHex((rim*0.8)*t);
++    addBand(vertsC, prevPoly, polyC, prevZ, zi);
++    prevPoly=polyC; prevZ=zi;
++  }
++  for(let i=1;i<5;i++){ // top cap
++    vertsC.push(polyC[0].x,polyC[0].y,prevZ, polyC[i].x,polyC[i].y,prevZ, polyC[i+1].x,polyC[i+1].y,prevZ);
++  }
++  if (T>0){
++    const Zb=-T;
++    for(let i=1;i<5;i++){
++      vertsC.push(inner[0].x,inner[0].y,Zb, inner[i+1].x,inner[i+1].y,Zb, inner[i].x,inner[i].y,Zb);
++    }
++  }
++  const geoC = new THREE.BufferGeometry();
++  geoC.setAttribute('position', new THREE.Float32BufferAttribute(vertsC,3));
++  geoC.computeVertexNormals();
++  const centerMesh = new THREE.Mesh(geoC, mat(UI.segments[6].opacity));
++
++  return { segMeshes, centerMesh, outer, inner };
++}
++
++export function buildMaterialFactory(UI, envTex=null){
++  return (opacity=1)=> buildMaterial(UI, opacity, envTex);
++}
++
+diff --git a/v2/src/materials.js b/v2/src/materials.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/src/materials.js
+@@ -0,0 +51 @@
++import * as THREE from 'three';
++
++export function buildMaterial(UI, opacity=1, envTex=null){
++  const col = UI.appearance.elemColor.value;
++  const m = UI.material;
++  let mat;
++  if (m.type.value === 'physical'){
++    mat = new THREE.MeshPhysicalMaterial({
++      color: col,
++      metalness: +m.metalness.value,
++      roughness: +m.roughness.value,
++      clearcoat: +m.clearcoat.value,
++      clearcoatRoughness: +m.clearcoatRough.value,
++      transmission: +m.transmission.value,
++      ior: +m.ior.value,
++      thickness: +m.thickness.value,
++      attenuationColor: new THREE.Color(m.attenuationColor.value),
++      attenuationDistance: +m.attenuationDist.value || 0,
++      envMapIntensity: +m.envIntensity.value,
++      transparent: true, opacity,
++      side: THREE.DoubleSide
++    });
++  } else if (m.type.value === 'standard'){
++    mat = new THREE.MeshStandardMaterial({
++      color: col,
++      metalness: +m.metalness.value,
++      roughness: +m.roughness.value,
++      envMapIntensity: +m.envIntensity.value,
++      transparent: opacity<1, opacity, side: THREE.DoubleSide
++    });
++  } else if (m.type.value === 'phong'){
++    mat = new THREE.MeshPhongMaterial({
++      color: col, shininess: 80, specular: new THREE.Color(0xdddddd),
++      transparent: opacity<1, opacity, side: THREE.DoubleSide
++    });
++  } else {
++    mat = new THREE.MeshBasicMaterial({ color: col, transparent: opacity<1, opacity, side: THREE.DoubleSide });
++  }
++  mat.envMap = envTex || null;
++  return mat;
++}
++
++export function updateMaterialFromUI(UI, meshes){
++  meshes.forEach(m=>{
++    if (!m) return;
++    const old = m.material;
++    m.material = buildMaterial(UI, old.opacity, old.envMap);
++    old.dispose && old.dispose();
++  });
++}
++
+diff --git a/v2/src/labels.js b/v2/src/labels.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/src/labels.js
+@@ -0,0 +68 @@
++import * as THREE from 'three';
++
++function wrapLinesByWidth(ctx, text, maxW){
++  const norm = String(text || "").replace(/&nbsp;/gi, "\u00A0").replace(/~/g, "\u00A0");
++  const rawLines = norm.split(/\r?\n|\\n|<br\s*\/?>(?i)|\|/);
++  const lines=[];
++  for(const raw of rawLines){
++    const words = raw.split(/[ \t]+/);
++    let cur="";
++    for(const w of words){
++      const sep = (cur===""?"":" ");
++      const test = cur + sep + w;
++      if (ctx.measureText(test).width <= maxW) cur=test;
++      else { if(cur) lines.push(cur); if(ctx.measureText(w).width > maxW){ lines.push(w); cur=""; } else cur=w; }
++    }
++    lines.push(cur);
++  }
++  return lines;
++}
++
++export function makeLabelMesh(text, typ){
++  const sizePx = +typ.fontSize.value;
++  const pxToWorld = +typ.pxToWorld.value;
++  const family = typ.fontFamily.value;
++  const weight = typ.fontWeight.value;
++  const lineHeight = +typ.lineHeight.value;
++  const color = typ.textColor.value;
++  const strokeColor = typ.strokeColor.value;
++  const strokePx = +typ.strokePx.value;
++
++  const DPR = Math.min(2.5, window.devicePixelRatio || 1), SS=2;
++  const scalePx = DPR * SS;
++  const maxPxWidth = 512;
++
++  const tmp = document.createElement('canvas');
++  const ctx = tmp.getContext('2d');
++  ctx.font = `${weight} ${sizePx*scalePx}px "${family}"`;
++  const lines = wrapLinesByWidth(ctx, text, maxPxWidth*scalePx);
++  const padX = Math.round(sizePx*0.5*scalePx);
++  const padY = Math.round(sizePx*0.4*scalePx);
++  const width = Math.max(maxPxWidth*scalePx + padX*2, ...lines.map(t=>ctx.measureText(t).width + padX*2));
++  const height = Math.round(lines.length*sizePx*lineHeight*scalePx + padY*2);
++  tmp.width = Math.max(2, Math.ceil(width));
++  tmp.height = Math.max(2, Math.ceil(height));
++
++  const c2 = tmp.getContext('2d');
++  c2.font = `${weight} ${sizePx*scalePx}px "${family}"`;
++  c2.textAlign = 'center'; c2.textBaseline='middle';
++  const cx = tmp.width/2; let y = padY + sizePx*0.7*scalePx; const dy=sizePx*lineHeight*scalePx;
++  if (strokePx>0){ c2.lineWidth = strokePx*scalePx; c2.strokeStyle = strokeColor; }
++  c2.fillStyle = color;
++  for(const ln of lines){ if(strokePx>0) c2.strokeText(ln,cx,y); c2.fillText(ln,cx,y); y+=dy; }
++
++  const tex = new THREE.CanvasTexture(tmp); tex.anisotropy = 8; tex.minFilter = THREE.LinearMipMapLinearFilter; tex.magFilter=THREE.LinearFilter;
++  const worldW = (tmp.width/scalePx)*pxToWorld, worldH = (tmp.height/scalePx)*pxToWorld;
++  const geo = new THREE.PlaneGeometry(worldW, worldH);
++  const mat = new THREE.MeshBasicMaterial({map:tex, transparent:true, depthWrite:false, depthTest:false});
++  const mesh = new THREE.Mesh(geo, mat); mesh.renderOrder=999;
++  return mesh;
++}
++
++export function disposeLabel(m){
++  if(!m) return; m.parent && m.parent.remove(m);
++  m.geometry && m.geometry.dispose();
++  if(m.material?.map) m.material.map.dispose();
++  m.material && m.material.dispose();
++}
++
+diff --git a/v2/src/points.js b/v2/src/points.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/src/points.js
+@@ -0,0 +68 @@
++import * as THREE from 'three';
++import { computeHex, OUTER_R } from './geometry.js';
++
++/**
++ * Build red points with unique IDs:
++ * - center-vertex-based points (equidistant to central inner vertex and two nearest moved inner vertices of neighbor segments) via circumcenter
++ * - outer-perimeter points between neighbor segments (midpoints between moved outer vertices)
++ */
++export function buildPoints(UI, geom){
++  const { outer, inner } = geom || computeHex(UI);
++  const gapWorld = UI.geometry.gap.value/20;
++  // per-segment translation due to gap (+ per-seg gap)
++  const trans = [];
++  for(let i=0;i<6;i++){
++    const A=outer[i], B=outer[(i+1)%6], C=inner[(i+1)%6], D=inner[i];
++    const cx=(A.x+B.x+C.x+D.x)/4, cy=(A.y+B.y+C.y+D.y)/4;
++    const len=Math.hypot(cx,cy)||1;
++    const extra = gapWorld + (UI.segments[i].gap||0)/20;
++    trans[i] = new THREE.Vector2((cx/len)*extra, (cy/len)*extra);
++  }
++  const Z_BACK = -(UI.geometry.thick.value/20) - 0.002;
++
++  const res = [];
++  const redMat = new THREE.MeshBasicMaterial({color:0xff3344});
++  const sphere = (pos,id)=>{
++    const g = new THREE.SphereGeometry(0.03,16,16);
++    const m = new THREE.Mesh(g, redMat.clone());
++    m.position.set(pos.x,pos.y,Z_BACK);
++    return {id, mesh:m, pos:new THREE.Vector3(pos.x,pos.y,Z_BACK)};
++  };
++
++  // central ring points (C0..C5): circumcenter of triangle (inner vertex i, inner vertex i translated seg i, inner vertex (i+1) translated seg i)
++  for(let i=0;i<6;i++){
++    const Vc = inner[i].clone();
++    const D  = inner[i].clone().add(trans[i]);
++    const C  = inner[(i+1)%6].clone().add(trans[i]);
++    const p = circumcenter(Vc, D, C);
++    res.push(sphere(p, `C${i}`));
++  }
++
++  // outer ring between segments (O0..O5): midpoint between translated outer vertices i and (i+1)
++  for(let i=0;i<6;i++){
++    const v1 = outer[(i+1)%6].clone().add(trans[i]);
++    const v2 = outer[(i+1)%6].clone().add(trans[(i+1)%6]);
++    const mid = new THREE.Vector2().addVectors(v1,v2).multiplyScalar(0.5);
++    res.push(sphere(mid, `O${i}`));
++  }
++
++  // optional: center point CC
++  res.push(sphere(new THREE.Vector2(0,0), 'CC'));
++
++  return res;
++}
++
++function circumcenter(A,B,C){
++  const ax=A.x, ay=A.y, bx=B.x, by=B.y, cx=C.x, cy=C.y;
++  const d = 2*(ax*(by-cy) + bx*(cy-ay) + cx*(ay-by));
++  if (Math.abs(d)<1e-8){ // fallback: centroid
++    return new THREE.Vector2((ax+bx+cx)/3,(ay+by+cy)/3);
++  }
++  const ux = ((ax*ax+ay*ay)*(by-cy) + (bx*bx+by*by)*(cy-ay) + (cx*cx+cy*cy)*(ay-by))/d;
++  const uy = ((ax*ax+ay*ay)*(cx-bx) + (bx*bx+by*by)*(ax-cx) + (cx*cx+cy*cy)*(bx-ax))/d;
++  return new THREE.Vector2(ux,uy);
++}
++
++/** alias kept for compatibility */
++export const layoutPoints = buildPoints;
++
+diff --git a/v2/src/paths.js b/v2/src/paths.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/src/paths.js
+@@ -0,0 +45 @@
++import * as THREE from 'three';
++
++/** Parse CSV-like spec into IDs. Unknown ids are ignored. */
++export function parsePathSpec(spec, availableIds){
++  const set = new Set(availableIds);
++  const ids = (spec||'').split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean).filter(id=>set.has(id));
++  return ids;
++}
++
++/** Build smooth curve (CatmullRom) with global + per-transition rounding. */
++export function buildCurveFromPath(ids, pts, pathUI){
++  if (!ids || ids.length<2) return null;
++  const map = new Map(pts.map(p=>[p.id, p.pos]));
++  const basePts = ids.map(id=> map.get(id)).filter(Boolean);
++  // apply per-transition rounding by inserting helper points near corners
++  const rglob = +pathUI.rounding.value; // 0..0.5
++  const overrides = parseOverrides(pathUI.roundingOverrides.value);
++  const out = [];
++  for (let i=0;i<basePts.length;i++){
++    const p = basePts[i];
++    if (i===0 || i===basePts.length-1){ out.push(p.clone()); continue; }
++    const prev = basePts[i-1], next = basePts[i+1];
++    const key = `${ids[i-1]}->${ids[i]}`; // rounding applied entering current from prev
++    const r = (overrides.get(key) ?? rglob);
++    const a = new THREE.Vector3().subVectors(p, prev).multiplyScalar(r);
++    const b = new THREE.Vector3().subVectors(p, next).multiplyScalar(r);
++    out.push(new THREE.Vector3().addVectors(p, a.negate())); // before corner
++    out.push(p.clone());                                      // corner (for labels)
++    out.push(new THREE.Vector3().addVectors(p, b.negate()));  // after corner
++  }
++  // CatmullRom
++  const curve = new THREE.CatmullRomCurve3(out, false, 'catmullrom', 0.5);
++  return curve;
++}
++
++function parseOverrides(s){
++  // format: "A->B=0.2; B->C=0.35"
++  const map = new Map();
++  (s||'').split(/[;\n]+/).map(x=>x.trim()).filter(Boolean).forEach(item=>{
++    const m = item.match(/^([A-Za-z0-9_]+)\s*->\s*([A-Za-z0-9_]+)\s*=\s*([0-9.]+)/);
++    if (m){ map.set(`${m[1]}->${m[2]}`, Math.max(0, Math.min(0.5, parseFloat(m[3])||0))); }
++  });
++  return map;
++}
++
+diff --git a/v2/src/particles.js b/v2/src/particles.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/src/particles.js
+@@ -0,0 +69 @@
++import * as THREE from 'three';
++
++export class ParticlesSystem{
++  constructor(curve, params, {reverse=false, glowLight=false}={}){
++    this.curve = curve;
++    this.params = params;
++    this.reverse = reverse;
++    this.object3d = new THREE.Group();
++
++    if (!curve){ return; }
++
++    const count = +params.count.value;
++    const size = +params.size.value;
++    const color = new THREE.Color(params.color.value);
++    const geom = new THREE.BufferGeometry();
++    const positions = new Float32Array(count*3);
++    const ages = new Float32Array(count);
++    const speeds = new Float32Array(count);
++    for(let i=0;i<count;i++){
++      const t = Math.random();
++      const p = curve.getPointAt(t);
++      positions[i*3+0]=p.x; positions[i*3+1]=p.y; positions[i*3+2]=p.z+0.02;
++      ages[i]=t;
++      speeds[i]= THREE.MathUtils.lerp(params.speed.value*0.5, params.speed.value*1.5, Math.random());
++    }
++    geom.setAttribute('position', new THREE.BufferAttribute(positions,3));
++    geom.setAttribute('a_age', new THREE.BufferAttribute(ages,1));
++    geom.setAttribute('a_speed', new THREE.BufferAttribute(speeds,1));
++
++    const mat = new THREE.PointsMaterial({
++      size, color: color.getHex(), transparent:true, opacity: params.brightness.value, depthWrite:false, blending: THREE.AdditiveBlending
++    });
++    this.points = new THREE.Points(geom, mat);
++    this.object3d.add(this.points);
++
++    if (glowLight){
++      this.light = new THREE.PointLight(color.getHex(), params.brightness.value*0.8, 2.5, 2.0);
++      this.object3d.add(this.light);
++      this.lightT = 0;
++    }
++  }
++
++  update(dt){
++    if (!this.curve || !this.points) return;
++    const positions = this.points.geometry.getAttribute('position');
++    const ages = this.points.geometry.getAttribute('a_age');
++    const speeds = this.points.geometry.getAttribute('a_speed');
++    const len = positions.count;
++    for(let i=0;i<len;i++){
++      let t = ages.array[i];
++      t += (this.reverse?-1:1) * speeds.array[i] * dt * 0.05;
++      t = (t%1 + 1)%1;
++      const p = this.curve.getPointAt(t);
++      positions.array[i*3+0]=p.x; positions.array[i*3+1]=p.y; positions.array[i*3+2]=p.z+0.02;
++      ages.array[i]=t;
++    }
++    positions.needsUpdate = true;
++    ages.needsUpdate = true;
++
++    if (this.light){
++      this.lightT = (this.lightT + dt * (this.params.speed.value*0.05))%1;
++      const p = this.curve.getPointAt(this.lightT);
++      this.light.position.set(p.x,p.y,p.z+0.05);
++      this.light.intensity = this.params.brightness.value*1.2;
++      this.light.color.set(this.params.color.value);
++    }
++  }
++}
++
+diff --git a/v2/src/ui.js b/v2/src/ui.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/src/ui.js
+@@ -0,0 +252 @@
++import * as THREE from 'three';
++import { buildMaterialFactory } from './geometry.js';
++import { buildMaterial } from './materials.js';
++
++export function buildUI(hooks){
++  const UI = {
++    appearance: { elemColor: { label:'Element Color', value: 0x00ff33 } },
++    view: {
++      rx: makeNum(-180,180,1, 12, 'Rotate X'),
++      ry: makeNum(-180,180,1, 30, 'Rotate Y'),
++      rz: makeNum(-180,180,1,  -8, 'Rotate Z'),
++      scale: makeNum(0.2,5,0.01, 1, 'Scale'),
++      scaleWheel: true
++    },
++    geometry: {
++      gap:   makeNum(0,10,0.1, 0.5, 'Gap'),
++      relief:makeNum(0,80,1, 4, 'Relief (H)'),
++      rim:   makeNum(0,60,1, 10,'Rim (ramp width)'),
++      round: makeNum(1,100,1, 32,'Roundness'),
++      ratio: makeNum(10,60,0.5, 26,'Center ratio (%)'),
++      thick: makeNum(0,30,1, 0,'Thickness (down)'),
++    },
++    material: {
++      type: makeSelect(['standard','physical','phong','basic'],'physical','Type'),
++      metalness: makeNum(0,1,0.01,0.35,'Metalness'),
++      roughness: makeNum(0,1,0.01,0.26,'Roughness'),
++      envIntensity: makeNum(0,5,0.05,1.2,'EnvMap intensity'),
++      transmission: makeNum(0,1,0.01,1,'Transmission'),
++      ior: makeNum(1,2.5,0.01,1.93,'IOR'),
++      thickness: makeNum(0,5,0.05,2.65,'Thickness'),
++      attenuationDist: makeNum(0,10,0.1,6.3,'Attenuation dist'),
++      attenuationColor: {label:'Attenuation color', value:'#a2fff2'},
++      clearcoat: makeNum(0,1,0.01,0.68,'Clearcoat'),
++      clearcoatRough: makeNum(0,1,0.01,0.57,'Clearcoat rough'),
++      envEnabled: {label:'Environment on', value:true}
++    },
++    typography: {
++      fontSize: makeNum(8,64,1,14,'Font size (px)'),
++      fontFamily: makeSelect(['system-ui','Inter','Roboto','Arial','Segoe UI','Open Sans','Montserrat','Noto Sans','PT Sans','Georgia','Times New Roman','monospace'],'system-ui','Font family'),
++      lineHeight: makeNum(0.8,2,0.05,1.5,'Line height'),
++      fontWeight: makeSelect(['400','500','600','700','800'],'600','Weight'),
++      textColor: {label:'Text color', value:'#ff3a3a'},
++      strokeColor: {label:'Stroke color', value:'#000000'},
++      strokePx: makeNum(0,6,1,0,'Stroke (px)'),
++      uppercase: {label:'UPPERCASE', value:true},
++      pxToWorld: makeNum(0.005,0.03,0.001,0.012,'px→world')
++    },
++    segments: [
++      { name:'Сегмент 1', opacity:0.5, gap:0 },
++      { name:'Сегмент 2', opacity:0.5, gap:0 },
++      { name:'Сегмент 3', opacity:0.5, gap:0 },
++      { name:'Сегмент 4', opacity:0.5, gap:0 },
++      { name:'Сегмент 5', opacity:0.5, gap:0 },
++      { name:'Сегмент 6', opacity:1.0, gap:0 },
++      { name:'Центр',     opacity:1.0, gap:0 },
++    ],
++    points: {
++      show: {label:'Show points', value:true},
++      showLabels: true
++    },
++    path: {
++      spec: 'C0,O0,C1,O1,C2,O2,C3,O3,C4,O4,C5,O5,CC',
++      rounding: makeNum(0,0.5,0.01, 0.15, 'Rounding (global)'),
++      roundingOverrides: '' // "C1->O1=0.25; O1->C2=0.1"
++    },
++    particles: {
++      followerLight: true,
++      fwd: {
++        color: {label:'Color', value:'#ffffff'},
++        brightness: makeNum(0,3,0.05, 1.2,'Brightness'),
++        size: makeNum(0.01,0.3,0.005, 0.06,'Size'),
++        speed: makeNum(0,4,0.05, 1.2,'Speed'),
++        count: makeNum(10,2000,1, 250,'Count')
++      },
++      back: {
++        color: {label:'Color', value:'#00ff55'},
++        brightness: makeNum(0,3,0.05, 1.0,'Brightness'),
++        size: makeNum(0.01,0.3,0.005, 0.06,'Size'),
++        speed: makeNum(0,4,0.05, 1.0,'Speed'),
++        count: makeNum(10,2000,1, 250,'Count')
++      }
++    },
++    _materialsFactory: null
++  };
++
++  // inject materials factory to avoid import cycle
++  UI._materialsFactory = (op)=> buildMaterial(UI, op, null);
++
++  // === UI DOM
++  const viewRows = document.getElementById('view-rows');
++  const geomRows = document.getElementById('geom-rows');
++  const matRows  = document.getElementById('mat-rows');
++  const typRows  = document.getElementById('typ-rows');
++  const ptsRows  = document.getElementById('pts-rows');
++  const pathRows = document.getElementById('path-rows');
++  const prtRows  = document.getElementById('prt-rows');
++
++  // helper builders
++  function rowRangeNumber(container, id, cfg){
++    const wrap = document.createElement('div'); wrap.className='row';
++    const label = document.createElement('label'); label.textContent = cfg.label || id; label.htmlFor = id;
++    const range = document.createElement('input'); range.type='range'; range.id=id; range.min=cfg.min; range.max=cfg.max; range.step=cfg.step; range.value=cfg.value;
++    const num = document.createElement('input'); num.type='number'; num.id=id+'-n'; num.min=cfg.min; num.max=cfg.max; num.step=cfg.step; num.value=cfg.value;
++    wrap.append(label, range, num); container.appendChild(wrap);
++    const apply = (v)=>{ const vv=Math.max(+cfg.min, Math.min(+cfg.max, +v)); range.value=num.value=vv; cfg.value=vv; };
++    range.addEventListener('input', ()=>{ apply(range.value); hooks.onAnyChange(cfg._kind); if (cfg._on) cfg._on(); });
++    num.addEventListener('input', ()=>{ apply(num.value); hooks.onAnyChange(cfg._kind); if (cfg._on) cfg._on(); });
++    cfg.set = (v)=>apply(v);
++    return {range,num,apply};
++  }
++  function rowSelect(container, id, cfg){
++    const wrap=document.createElement('div'); wrap.className='row';
++    const label=document.createElement('label'); label.textContent=cfg.label||id; label.htmlFor=id;
++    const sel=document.createElement('select'); sel.id=id;
++    cfg.options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; o.textContent=opt; sel.appendChild(o); });
++    sel.value = cfg.value; wrap.append(label, sel); container.appendChild(wrap);
++    sel.addEventListener('change', ()=>{ cfg.value=sel.value; hooks.onAnyChange(cfg._kind); });
++    return sel;
++  }
++  function rowCheckbox(container,id,cfg){
++    const wrap=document.createElement('div'); wrap.className='row';
++    const label=document.createElement('label'); label.textContent=cfg.label||id; label.htmlFor=id;
++    const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=!!cfg.value;
++    wrap.append(label, cb); container.appendChild(wrap);
++    cb.addEventListener('change', ()=>{ cfg.value=cb.checked; hooks.onAnyChange(cfg._kind); });
++    return cb;
++  }
++
++  // assign kinds for change routing
++  Object.values(UI.geometry).forEach(x=>x._kind='geometry');
++  Object.values(UI.view).forEach(x=>{ if(typeof x==='object'&&'min'in x) x._kind='view'; });
++  Object.values(UI.material).forEach(x=>{ if(typeof x==='object'&&'min'in x) x._kind='materials'; });
++  Object.values(UI.typography).forEach(x=>{ if(typeof x==='object'&&'min'in x) x._kind='typography'; });
++  UI.points.show._kind='points';
++
++  // VIEW
++  rowRangeNumber(viewRows,'rx',UI.view.rx);
++  rowRangeNumber(viewRows,'ry',UI.view.ry);
++  rowRangeNumber(viewRows,'rz',UI.view.rz);
++  rowRangeNumber(viewRows,'scale',UI.view.scale);
++  // GEOM
++  rowRangeNumber(geomRows,'gap',UI.geometry.gap);
++  rowRangeNumber(geomRows,'relief',UI.geometry.relief);
++  rowRangeNumber(geomRows,'rim',UI.geometry.rim);
++  rowRangeNumber(geomRows,'round',UI.geometry.round);
++  rowRangeNumber(geomRows,'ratio',UI.geometry.ratio);
++  rowRangeNumber(geomRows,'thick',UI.geometry.thick);
++  // MAT
++  rowSelect(matRows,'mat-type',UI.material.type);
++  rowRangeNumber(matRows,'metalness',UI.material.metalness);
++  rowRangeNumber(matRows,'roughness',UI.material.roughness);
++  rowRangeNumber(matRows,'envIntensity',UI.material.envIntensity);
++  rowRangeNumber(matRows,'transmission',UI.material.transmission);
++  rowRangeNumber(matRows,'ior',UI.material.ior);
++  rowRangeNumber(matRows,'thickness',UI.material.thickness);
++  rowRangeNumber(matRows,'attenuationDist',UI.material.attenuationDist);
++  rowRangeNumber(matRows,'clearcoat',UI.material.clearcoat);
++  rowRangeNumber(matRows,'clearcoatRough',UI.material.clearcoatRough);
++  // Attenuation color
++  (()=>{
++    const wrap=document.createElement('div'); wrap.className='row';
++    const lab=document.createElement('label'); lab.textContent=UI.material.attenuationColor.label;
++    const col=document.createElement('input'); col.type='color'; col.value=UI.material.attenuationColor.value;
++    const hex=document.createElement('input'); hex.type='text'; hex.value=UI.material.attenuationColor.value; hex.style.width='110px';
++    hex.className='code'; wrap.append(lab,col,hex); matRows.appendChild(wrap);
++    const apply=v=>{ UI.material.attenuationColor.value=v; hooks.onAnyChange('materials'); };
++    col.addEventListener('input', ()=>apply(col.value));
++    hex.addEventListener('input', ()=>{ const s=hex.value.replace('#',''); if(/^[0-9a-f]{6}$/i.test(s)){ apply('#'+s);} });
++  })();
++  // TYPOGRAPHY
++  rowRangeNumber(typRows,'fontSize',UI.typography.fontSize);
++  rowRangeNumber(typRows,'lineHeight',UI.typography.lineHeight);
++  rowRangeNumber(typRows,'strokePx',UI.typography.strokePx);
++  rowRangeNumber(typRows,'pxToWorld',UI.typography.pxToWorld);
++  rowSelect(typRows,'fontFamily',UI.typography.fontFamily);
++  rowSelect(typRows,'fontWeight',UI.typography.fontWeight);
++  // POINTS
++  rowCheckbox(ptsRows,'points-show',UI.points.show);
++  (()=>{
++    const wrap=document.createElement('div'); wrap.className='row';
++    const lab=document.createElement('label'); lab.textContent='Show point labels';
++    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=UI.points.showLabels;
++    wrap.append(lab,cb); ptsRows.appendChild(wrap);
++    cb.addEventListener('change', ()=>{ UI.points.showLabels = cb.checked; hooks.onAnyChange('points'); });
++  })();
++  // PATH
++  (()=>{
++    const wrap1=document.createElement('div'); wrap1.className='row';
++    const lab1=document.createElement('label'); lab1.textContent='Path order (CSV)';
++    const inp1=document.createElement('input'); inp1.type='text'; inp1.value=UI.path.spec; inp1.className='code'; inp1.style.width='100%';
++    wrap1.append(lab1, inp1); pathRows.appendChild(wrap1);
++    inp1.addEventListener('change', ()=>{ UI.path.spec=inp1.value; hooks.onPathChange && hooks.onPathChange(); });
++
++    const wrap2=document.createElement('div'); wrap2.className='row';
++    const lab2=document.createElement('label'); lab2.textContent='Rounding overrides';
++    const inp2=document.createElement('input'); inp2.type='text'; inp2.value=UI.path.roundingOverrides; inp2.className='code'; inp2.style.width='100%';
++    wrap2.append(lab2, inp2); pathRows.appendChild(wrap2);
++    inp2.addEventListener('change', ()=>{ UI.path.roundingOverrides=inp2.value; hooks.onPathChange && hooks.onPathChange(); });
++
++    rowRangeNumber(pathRows,'rounding',UI.path.rounding);
++  })();
++  // PARTICLES
++  function partPanel(prefix, obj){
++    (()=>{
++      const wrap=document.createElement('div'); wrap.className='row';
++      const lab=document.createElement('label'); lab.textContent=`${prefix} Color`;
++      const col=document.createElement('input'); col.type='color'; col.value=obj.color.value;
++      const hex=document.createElement('input'); hex.type='text'; hex.value=obj.color.value; hex.className='code'; hex.style.width='110px';
++      wrap.append(lab,col,hex); prtRows.appendChild(wrap);
++      const apply=v=>{ obj.color.value=v; hooks.onAnyChange('particles'); };
++      col.addEventListener('input', ()=>apply(col.value));
++      hex.addEventListener('input', ()=>{ const s=hex.value.replace('#',''); if(/^[0-9a-f]{6}$/i.test(s)){ apply('#'+s);} });
++    })();
++    rowRangeNumber(prtRows,`${prefix}-brightness`,obj.brightness);
++    rowRangeNumber(prtRows,`${prefix}-size`,obj.size);
++    rowRangeNumber(prtRows,`${prefix}-speed`,obj.speed);
++    rowRangeNumber(prtRows,`${prefix}-count`,obj.count);
++  }
++  partPanel('Fwd', UI.particles.fwd);
++  partPanel('Back', UI.particles.back);
++  // follower light
++  (()=>{
++    const wrap=document.createElement('div'); wrap.className='row';
++    const lab=document.createElement('label'); lab.textContent='Follower light';
++    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=UI.particles.followerLight;
++    wrap.append(lab,cb); prtRows.appendChild(wrap);
++    cb.addEventListener('change', ()=>{ UI.particles.followerLight=cb.checked; hooks.onAnyChange('particles'); });
++  })();
++
++  // Panel toggles (all hidden by default)
++  const toggles = [
++    ['toggle-view','view-ui'],
++    ['toggle-geom','geom-ui'],
++    ['toggle-mat','mat-ui'],
++    ['toggle-typ','typ-ui'],
++    ['toggle-pts','pts-ui'],
++    ['toggle-path','path-ui'],
++    ['toggle-prt','prt-ui']
++  ];
++  toggles.forEach(([chk,panel])=>{
++    const c=document.getElementById(chk); const p=document.getElementById(panel);
++    c.checked=false; p.classList.add('hidden');
++    c.addEventListener('change', ()=>{ p.classList.toggle('hidden', !c.checked); hooks.onTogglePanels && hooks.onTogglePanels(); });
++  });
++
++  return UI;
++}
++
++// helpers
++function makeNum(min,max,step,value,label){ return {min,max,step,value,label, set(v){this.value=v;} }; }
++function makeSelect(options,value,label){ return {options,value,label}; }
++
+diff --git a/v2/README.md b/v2/README.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/v2/README.md
+@@ -0,0 +12 @@
++# HexFlow v2
++
++Новая модульная версия под ваши требования:
++- точки (центральные и внешние) — на задней плоскости, пересчитываются при изменении гэпа/геометрии;
++- один составной путь; глобальная и пер-переходная настройка закруглений;
++- два потока частиц (вперёд/назад) с разными цвет/яркость/размер/скорость;
++- View панель с синхронизацией мыши (OrbitControls) и слайдеров RX/RY/RZ; колёсиком — масштаб (если включено);
++- материалы, типографика и панели — скрыты по умолчанию и включаются чипами.
++
++Откройте `index.html` через локальный сервер (из-за CORS).
++
++
