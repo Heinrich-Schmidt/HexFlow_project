@@ -1,62 +1,66 @@
-// src/particles.js
 import * as THREE from 'three';
 
-// Simple particle along a curve with trail "ghosts"
-export class FlowAlongCurve {
-  constructor(curve, opts){
-    this.curve = curve;
-    this.t = Math.random();
-    this.speed = opts.speed || 0.3;
-    this.color = new THREE.Color(opts.color||0xffffff);
-    this.size = opts.size || 0.06;
-    this.trail = Math.max(0, opts.trail||0);
+/** Simple particle system that moves N head sprites along a given path, with optional trailing */
+export class FlowParticles {
+  constructor({scene, curve, color='#ffffff', size=0.06, speed=0.25, lightPower=0, count=30}){
+    this.scene=scene;
+    this.curve=curve;
+    this.color=color;
+    this.size=size;
+    this.speed=speed;
+    this.count=count;
+    this.offsets = new Float32Array(count); // 0..1 positions along curve
+    for(let i=0;i<count;i++) this.offsets[i] = (i/count);
     this.group = new THREE.Group();
+    scene.add(this.group);
 
-    // point sprite
-    const tex = makeDotTexture();
-    this.mat = new THREE.PointsMaterial({map:tex, alphaTest:0.1, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, size:this.size, sizeAttenuation:true, color:this.color});
-    this.geo = new THREE.BufferGeometry();
-    this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((this.trail+1)*3),3));
-    this.points = new THREE.Points(this.geo, this.mat);
-    this.group.add(this.points);
+    this.sprites=[];
+    for(let i=0;i<count;i++){
+      const mat = new THREE.SpriteMaterial({ color: new THREE.Color(color), transparent:true, opacity:1, blending:THREE.AdditiveBlending });
+      const spr = new THREE.Sprite(mat);
+      spr.scale.set(size,size,1);
+      this.group.add(spr);
+      this.sprites.push(spr);
+    }
 
-    // optional light
-    if (opts.light && opts.light.enabled){
-      this.light = new THREE.PointLight(opts.light.color||this.color.getHex(), opts.light.intensity||0.6, opts.light.distance||1.2);
-      this.group.add(this.light);
+    this.lightPower = lightPower;
+    this.pointLight = null;
+    if (lightPower>0){
+      this.pointLight = new THREE.PointLight(new THREE.Color(color), lightPower, 2.5, 2);
+      this.group.add(this.pointLight);
     }
   }
-  step(dt){
-    this.t = (this.t + dt*this.speed) % 1;
-    const positions = this.geo.attributes.position.array;
-    for(let i=0;i<=this.trail;i++){
-      const tt = (this.t - i*0.02 + 1) % 1;
-      const p = this.curve.getPoint(tt);
-      positions[i*3+0]=p.x; positions[i*3+1]=p.y; positions[i*3+2]=p.z;
-      if (this.light && i===0){ this.light.position.copy(p); }
+
+  setCurve(curve){ this.curve=curve; }
+  setColor(color){
+    this.color=color;
+    this.sprites.forEach(s=>s.material.color.set(color));
+    if (this.pointLight) this.pointLight.color.set(color);
+  }
+  setSize(size){ this.size=size; this.sprites.forEach(s=>s.scale.set(size,size,1)); }
+  setSpeed(speed){ this.speed=speed; }
+  setLightPower(p){ this.lightPower=p; if (this.pointLight){ this.pointLight.intensity=p; } else if (p>0){ this.pointLight = new THREE.PointLight(new THREE.Color(this.color), p, 2.5, 2); this.group.add(this.pointLight);} }
+
+  update(dt, direction=1){
+    if (!this.curve) return;
+    for(let i=0;i<this.count;i++){
+      let u = this.offsets[i];
+      u += direction*this.speed*dt;
+      if (u>1) u-=1;
+      if (u<0) u+=1;
+      this.offsets[i]=u;
+      const p = this.curve.getPoint(u);
+      this.sprites[i].position.copy(p);
     }
-    this.geo.attributes.position.needsUpdate = true;
-    // fade trail by changing material opacity slightly
-    this.mat.opacity = 0.35 + 0.35*Math.sin((performance.now()%1000)/1000*Math.PI*2);
+    if (this.pointLight){
+      const headU = this.offsets[this.count-1];
+      const p = this.curve.getPoint(headU);
+      this.pointLight.position.copy(p);
+    }
   }
-}
 
-function makeDotTexture(){
-  const s=64; const c=document.createElement('canvas'); c.width=c.height=s;
-  const ctx=c.getContext('2d'); const g=ctx.createRadialGradient(s/2,s/2,0, s/2,s/2,s/2);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(s/2,s/2,s/2,0,Math.PI*2); ctx.fill();
-  const tex=new THREE.CanvasTexture(c); tex.anisotropy=16; return tex;
-}
-
-export function makeParticlesForPath(curve, count, palette){
-  const group=new THREE.Group();
-  const items=[];
-  for(let i=0;i<count;i++){
-    const item=new FlowAlongCurve(curve, palette);
-    group.add(item.group);
-    items.push(item);
+  dispose(){
+    this.sprites.forEach(s=>s.material.dispose());
+    this.group.parent && this.group.parent.remove(this.group);
   }
-  return {group, items};
 }
