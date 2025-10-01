@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HexFlow — anchors, paths & particles</title>
+  <style>
+    :root{color-scheme:dark}
+    html,body{margin:0;height:100%;display:flex;flex-direction:column;background:#0b1016;font:14px/1.35 system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    .topbar{padding:10px;display:flex;flex-direction:column;gap:10px;background:linear-gradient(#0f1012,#0f1012cc);border-bottom:1px solid #202225}
+    .chip{display:flex;gap:8px;align-items:center;padding:6px 10px;border-radius:8px;border:1px solid #222;background:#000a;color:#e5e7eb;font-size:12px;cursor:pointer;user-select:none}
+    .toggles{display:flex;flex-wrap:wrap;gap:8px}
+    .panels{display:flex;flex-wrap:wrap;gap:10px}
+    .ui{min-width:300px;background:#0009;border:1px solid #222;border-radius:10px;color:#e5e7eb;padding:12px}
+    .ui.hidden{display:none}
+    .ui h3{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+    .row{display:flex;align-items:center;gap:8px;margin:6px 0}
+    .row label{width:180px;font-size:12px;opacity:.9}
+    .row input[type=range]{flex:1}
+    .row input[type=number],.row input[type=text]{width:110px;background:#0e0f11;border:1px solid #333;border-radius:6px;color:#e5e7eb;padding:4px 6px}
+    .row select{flex:1;min-width:180px;background:#0e0f11;border:1px solid #333;border-radius:6px;color:#e5e7eb;padding:5px}
+    .row textarea{flex:1;min-height:60px;background:#0e0f11;border:1px solid #333;border-radius:6px;color:#e5e7eb;padding:6px;font:12px/1.4 ui-monospace,monospace}
+    #viewport{flex:1;min-height:0;position:relative}
+    #viewport canvas{width:100%;height:100%;display:block}
+    .small{font-size:12px;opacity:.75}
+    .btn{background:#1f2937;border:1px solid #334155;border-radius:8px;color:#e5e7eb;padding:6px 10px;cursor:pointer}
+    .btn:disabled{opacity:.5;cursor:default}
+    .grid{display:grid;gap:8px;grid-template-columns:140px 160px 160px auto}
+    .grid .hdr{font-size:12px;opacity:.75}
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+      "OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/controls/OrbitControls.js",
+      "RoomEnvironment": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/environments/RoomEnvironment.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="toggles">
+      <label class="chip"><input id="tg-geom" type="checkbox" /> Geometry</label>
+      <label class="chip"><input id="tg-light" type="checkbox" /> Lighting</label>
+      <label class="chip"><input id="tg-seg" type="checkbox" /> Segments</label>
+      <label class="chip"><input id="tg-anc" type="checkbox" /> Anchors</label>
+      <label class="chip"><input id="tg-path" type="checkbox" /> Paths</label>
+      <label class="chip"><input id="tg-part" type="checkbox" /> Particles</label>
+      <label class="chip"><input id="tg-view" type="checkbox" /> View</label>
+    </div>
+    <div class="panels">
+      <div class="ui hidden" id="geom-ui"><h3>Geometry</h3><div id="geom-rows"></div></div>
+      <div class="ui hidden" id="light-ui"><h3>Lighting</h3><div id="light-rows"></div></div>
+      <div class="ui hidden" id="seg-ui"><h3>Segments</h3><div id="seg-rows"></div></div>
+      <div class="ui hidden" id="anc-ui"><h3>Anchors</h3><div id="anc-rows"></div></div>
+      <div class="ui hidden" id="path-ui"><h3>Paths</h3><div id="path-rows"></div></div>
+      <div class="ui hidden" id="part-ui"><h3>Particles</h3><div id="part-rows"></div></div>
+      <div class="ui hidden" id="view-ui"><h3>View</h3><div id="view-rows"></div></div>
+    </div>
+  </div>
+  <div id="viewport"></div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
